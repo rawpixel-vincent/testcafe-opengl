@@ -1,0 +1,191 @@
+# Base Docker Image
+ARG BASE_IMAGE=alpine:edge
+FROM ${BASE_IMAGE} as builder
+
+# Install all needed build deps for Mesa3D
+ARG LLVM_VERSION=15
+RUN set -xe; \
+  apk add --no-cache \
+  autoconf \
+  automake \
+  bison \
+  build-base \
+  cmake \
+  elfutils-dev \
+  expat-dev \
+  flex \
+  gettext \
+  git \
+  glproto \
+  libdrm-dev \
+  libtool \
+  libva-dev \
+  libx11-dev \
+  libxcb-dev \
+  libxdamage-dev \
+  libxext-dev \
+  libxfixes-dev \
+  libxrandr-dev \
+  libxshmfence-dev \
+  libxt-dev \
+  libxvmc-dev \
+  libxxf86vm-dev \
+  llvm${LLVM_VERSION} \
+  llvm${LLVM_VERSION}-dev \
+  llvm-libunwind-dev \
+  eudev-libs \
+  makedepend \
+  meson \
+  py-mako \
+  py3-libxml2 \
+  py3-mako \
+  python3 \
+  python3-dev \
+  talloc-dev \
+  wayland-dev \
+  wayland-protocols \
+  xorg-server-dev \
+  xorgproto \
+  zlib-dev \
+  zstd-dev;
+
+# Clone Mesa source repo. (this step caches)
+# Due to ongoing packaging issues we build from git vs tar packages
+# Refer to https://bugs.freedesktop.org/show_bug.cgi?id=107865
+ARG MESA_VERSION=22.2.0
+RUN set -xe; \
+  mkdir -p /var/tmp/build; \
+  cd /var/tmp/build/; \
+  git clone --depth=1 --branch=mesa-${MESA_VERSION} https://gitlab.freedesktop.org/mesa/mesa.git;
+
+# Build Mesa from source.
+ARG BUILD_TYPE=release
+ARG BUILD_OPTIMIZATION=3
+RUN set -xe; \
+  cd /var/tmp/build/mesa; \
+  libtoolize; \
+  if [ "$(uname -m)" ==  "aarch64" ] || [ "$(uname -m)" == "armv7l" ]; \
+  then \
+  galium_drivers=swrast; \
+  else \
+  galium_drivers=swrast,swr; \
+  fi ;\
+  meson \
+  --buildtype=${BUILD_TYPE} \
+  --prefix=/usr/local \
+  --sysconfdir=/etc \
+  -D b_ndebug=true \
+  -D egl=true \
+  -D gallium-nine=false \
+  -D gallium-xvmc=false \
+  -D gbm=true \
+  -D gles1=false \
+  -D gles2=true \
+  -D opengl=true \
+  -D dri-drivers-path=/usr/local/lib/xorg/modules/dri \
+  -D dri-drivers= \
+  -D dri3=true  \
+  -D egl=false \
+  -D gallium-drivers="$galium_drivers" \
+  -D gbm=false \
+  -D glx=dri \
+  -D llvm=true \
+  -D lmsensors=false \
+  -D optimization=${BUILD_OPTIMIZATION} \
+  -D osmesa=true  \
+  -D platforms=x11,wayland \
+  -D shared-glapi=true \
+  -D shared-llvm=true \
+  -D vulkan-drivers= \
+  build/; \
+  ninja -C build/ -j $(getconf _NPROCESSORS_ONLN); \
+  ninja -C build/ install
+
+# Copy our entrypoint into the container.
+# COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
+
+# Create fresh image from alpine
+ARG BASE_IMAGE=alpine:edge
+FROM ${BASE_IMAGE}
+
+# Copy the Mesa build & entrypoint script from previous stage
+COPY --from=builder /usr/local /usr/local
+
+# Install runtime dependencies for Mesa and link xorg dri modules
+ARG LLVM_VERSION=15
+RUN set -xe; \
+  apk --update add --no-cache \
+  binutils \
+  expat \
+  llvm${LLVM_VERSION}-libs \
+  setxkbmap \
+  xdpyinfo \
+  xrandr \
+  xvfb \
+  xvfb-run \
+  zstd-libs; \
+  ln -sf /usr/local/lib/xorg/modules/dri/* /usr/lib/xorg/modules/dri/
+
+# Setup our environment variables.
+ENV \
+  DISPLAY=":99" \
+  GALLIUM_DRIVER="llvmpipe" \
+  LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH" \
+  LIBGL_ALWAYS_SOFTWARE="1" \
+  LP_DEBUG="" \
+  LP_NO_RAST="false" \
+  LP_NUM_THREADS="" \
+  LP_PERF=""
+
+
+
+ENV ALPINE_REPOS="\
+  --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/\
+  --repository http://dl-cdn.alpinelinux.org/alpine/edge/community/\
+  --repository http://dl-cdn.alpinelinux.org/alpine/edge/main/\
+  "
+
+RUN apk --no-cache $ALPINE_REPOS upgrade && \
+  apk --no-cache $ALPINE_REPOS add \
+  nodejs npm yarn libevent chromium firefox mesa-gl mesa-egl xwininfo xvfb dbus eudev ttf-freefont fluxbox procps tzdata python3-dev xdg-user-dirs xdg-utils make gcc g++ ttf-liberation \
+  libappindicator \
+  alsa-lib \
+  cairo-dev \
+  cups-dev \
+  pango-dev \
+  libxcursor-dev \
+  git \
+  ffmpeg \
+  openssl
+
+RUN cd /opt && mkdir testcafe-ssl-config && cd /opt/testcafe-ssl-config
+COPY testdomain.ext /opt/testcafe-ssl-config/testdomain.ext
+WORKDIR /opt/testcafe-ssl-config
+RUN openssl genrsa -out myCA.key 2048
+RUN openssl req -x509 -new -nodes -key myCA.key -sha256 -days 1825 -out myCA.pem -subj "/C=CA/ST=QC/O=Company Inc/CN=localhost"
+RUN openssl genrsa -out testingdomain.key 2048
+RUN openssl req -new -key testingdomain.key -out testingdomain.csr -subj "/C=CA/ST=QC/O=Company Inc/CN=localhost"
+RUN openssl x509 -req -in testingdomain.csr -CA myCA.pem -CAkey myCA.key -CAcreateserial -out testingdomain.crt -days 825 -sha256 -extfile testdomain.ext
+RUN openssl pkcs12 -export -out testingdomain.pfx -inkey testingdomain.key -in testingdomain.crt -certfile myCA.pem -passout pass:
+
+RUN cd /opt && git clone https://github.com/DevExpress/testcafe-browser-tools && \
+  cd /opt/testcafe-browser-tools && npm install --arch=arm64 --platform=linux && \
+  ./node_modules/.bin/gulp buildLinux && \
+  mkdir /opt/testcafe-bin-custom && mkdir /opt/testcafe-bin-custom/linux && cp -r bin/linux /opt/testcafe-bin-custom
+
+COPY testcafe.sh /opt/testcafe/docker/testcafe.sh
+RUN chmod +x /opt/testcafe/docker/testcafe.sh
+
+ENV NODE_TLS_REJECT_UNAUTHORIZED 0
+ENV NODE_OPTIONS=--openssl-legacy-provider
+COPY tests/package.json /tests/package.json
+RUN cd /tests && npm install --arch=arm64 --platform=linux && \
+  rm -rf /tests/node_modules/testcafe-browser-tools/bin/linux && \
+  cp -r /opt/testcafe-bin-custom/linux /tests/node_modules/testcafe-browser-tools/bin && \
+  find /tests/node_modules/testcafe-browser-tools/bin/linux -type f -exec chmod +x {} \;
+
+COPY tests/ /tests
+RUN ls -al /tests
+
+EXPOSE 1337 1338
+ENTRYPOINT ["/opt/testcafe/docker/testcafe.sh"]
