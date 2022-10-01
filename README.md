@@ -1,6 +1,6 @@
 # testcafe opengl
 
-Run testcafe on arm64 arch, add webgl v2 support to firefox / chrome **without the need of a CPU**
+Run testcafe on arm64 arch, add webgl v2 support to firefox / chrome **without the need for a GPU**
 
 N.B. Provided as is for the community,
 PR and feedback is welcome.
