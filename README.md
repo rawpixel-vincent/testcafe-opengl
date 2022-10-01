@@ -21,9 +21,9 @@ docker run --init --env TESTCAFE_CMD="see below" --env XVFB_WHD=1920x1080x24 --v
 
 ### Examples of TESTCAFE_CMD
 
-`TESTCAFE_CMD="node node_modules/testcafe/bin/testcafe-with-v8-flag-filter.js \"firefox\" testcafe/"`
+`TESTCAFE_CMD="node node_modules/testcafe/bin/testcafe-with-v8-flag-filter.js \"firefox\" test-folder/"`
 
-`TESTCAFE_CMD="node node_modules/testcafe/bin/testcafe-with-v8-flag-filter.js \"chromium --use-gl=desktop --enable-webgl -gpu --gpu-launcher --in-process-gpu --ignore-gpu-blacklist --ignore-gpu-blocklist --no-sandbox --disable-dev-shm-usage --allow-insecure-localhost --ignore-certificate-errors --ignore-ssl-errors\" testcafe/"`
+`TESTCAFE_CMD="node node_modules/testcafe/bin/testcafe-with-v8-flag-filter.js \"chromium --use-gl=desktop --enable-webgl -gpu --gpu-launcher --in-process-gpu --ignore-gpu-blacklist --ignore-gpu-blocklist --no-sandbox --disable-dev-shm-usage --allow-insecure-localhost --ignore-certificate-errors --ignore-ssl-errors\" test-folder/"`
 
 ### Configuration file example
 
@@ -62,7 +62,7 @@ module.exports = {
 ```
 
 Run with
-`TESTCAFE_CMD="node node_modules/testcafe/bin/testcafe-with-v8-flag-filter.js 'chromium --use-gl=desktop --enable-webgl -gpu --gpu-launcher --in-process-gpu --ignore-gpu-blacklist --ignore-gpu-blocklist --no-sandbox --disable-dev-shm-usage --allow-insecure-localhost --ignore-certificate-errors --ignore-ssl-errors\" testcafe/ --config-file ssl.ci.testcaferc.js"`
+`TESTCAFE_CMD="node node_modules/testcafe/bin/testcafe-with-v8-flag-filter.js 'chromium --use-gl=desktop --enable-webgl -gpu --gpu-launcher --in-process-gpu --ignore-gpu-blacklist --ignore-gpu-blocklist --no-sandbox --disable-dev-shm-usage --allow-insecure-localhost --ignore-certificate-errors --ignore-ssl-errors\" test-folder/ --config-file ssl.ci.testcaferc.js"`
 
 ## Credits
 
